@@ -40,3 +40,12 @@ class MLXTurboQuant:
         )
         
         return dot_mse + dot_residual
+        
+    def decompress(self, compressed: dict) -> mx.array:
+        """
+        Восстанавливает векторы (используя базовый MSE-квантователь).
+        Примечание: Для абсолютно математически точного dot-product (учитывая QJL остаток) 
+        следует использовать estimate_dot(), так как QJL остаток оценивается асимметрично.
+        Здесь возвращаем PolarQuant базис.
+        """
+        return self.pq.decompress(compressed["pq_data"])
