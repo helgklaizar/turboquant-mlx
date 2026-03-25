@@ -5,11 +5,9 @@ import traceback
 
 def main():
     models = [
-        "mlx-community/Meta-Llama-3-8B-Instruct-4bit",
-        "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
-        "mlx-community/gemma-2-2b-it-4bit",
-        "mlx-community/Phi-3.5-mini-instruct-4bit",
-        "mlx-community/Llama-3.2-1B-Instruct-4bit"
+        "mlx-community/DeepSeek-R1-Distill-Llama-8B-4bit",
+        "mlx-community/Mistral-Nemo-Instruct-2407-4bit",
+        "mlx-community/Qwen2.5-7B-Instruct-4bit"
     ]
     
     results = {}

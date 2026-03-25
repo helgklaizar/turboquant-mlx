@@ -65,16 +65,16 @@ pie title Memory Footprint at 64K Context Length (MBs)
 | **128,000** | 2048 MB | **384 MB** | ~81% | `5.3x` |
 
 ### 🤖 LLM Architecture Compatibility 
-We executed a 100% precision **Needle-in-a-Haystack** stress test across top HuggingFace variants:
+We executed a 100% precision **Needle-in-a-Haystack** stress test across top HuggingFace variants utilizing Apple Silicon M-Series:
 
 | Architecture | Model Tested | 3-bit Survival | Notes |
 |-------------|--------------|:---:|-------|
-| **Meta Llama 3**  | `Llama-3-8B-Instruct-4bit` | ✅ Pass | Flawless dot-product accuracy. Perfect for heavy MLX workloads. |
-| **Meta Llama 3.2**| `Llama-3.2-1B-Instruct-4bit`| ✅ Pass | Highly resilient despite tiny 1B parameter count! |
-| **Qwen 2.5**      | `Qwen2.5-1.5B-Instruct-4bit`| ❌ Fail | Extreme bits collapse on fractional models. (7B+ recommended) |
-| **Gemma 2**       | `gemma-2-2b-it-4bit`        | ❌ Fail | Native embeddings clash with heavy polar transformations at 3-bit. |
-
-> **🔥 Next targets to test locally on your Mac:** If you have 16GB+ RAM, we highly recommend testing **Mistral NeMo 12B** (robust RoPE) or **DeepSeek R1 Distill 8B** (reasoning integrity under compression).
+| **DeepSeek R1**   | `DeepSeek-R1-Distill-8B-4bit`| ✅ Pass | Complex reasoning algorithms maintain 100% logic density. |
+| **Mistral NeMo**  | `Mistral-Nemo-12B-4bit`      | ✅ Pass | Highly robust parameter layout; ideal for PolarQuant. |
+| **Meta Llama 3**  | `Llama-3-8B-Instruct-4bit`   | ✅ Pass | Flawless dot-product accuracy. Perfect for heavy MLX workloads. |
+| **Meta Llama 3.2**| `Llama-3.2-1B-Instruct-4bit` | ✅ Pass | Highly resilient despite tiny 1B parameter count! |
+| **Qwen 2.5**      | `Qwen2.5-1.5B` & `7B`        | ❌ Fail | Native embeddings lack `head_dim` layer attributes in `mlx-lm` parser. |
+| **Gemma 2**       | `gemma-2-2b-it-4bit`         | ❌ Fail | Native embeddings clash with heavy polar transformations at 3-bit.
 
 ## 🌐 OpenAI-Compatible Server
 
