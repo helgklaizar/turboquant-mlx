@@ -5,9 +5,7 @@ import traceback
 
 def main():
     models = [
-        "mlx-community/DeepSeek-R1-Distill-Llama-8B-4bit",
-        "mlx-community/Mistral-Nemo-Instruct-2407-4bit",
-        "mlx-community/Qwen2.5-7B-Instruct-4bit"
+        "mlx-community/Qwen2.5-32B-Instruct-4bit"
     ]
     
     results = {}
@@ -23,6 +21,26 @@ def main():
             
             # Внедрение компрессии с системным префиксом 64 токена
             apply_turboquant_cache(model, bits=3, fp16_sink_size=64)
+            
+            # Внедрение SSD-стриминга весов (Layer-by-Layer Evaluation)
+            import types
+            for i, layer in enumerate(model.model.layers if hasattr(model, "model") else model.layers):
+                orig_call = layer.__call__
+                def stream_layer(self, x, mask=None, cache=None, **kwargs):
+                    res = orig_call(x, mask=mask, cache=cache, **kwargs)
+                    # Forcing evaluation to clear graph and un-wire memory
+                    mx.eval(res)
+                    if cache is not None:
+                        # cache is either a tuple of caches or dict
+                        if isinstance(cache, list) and len(cache) > self.layer_idx:
+                            c = cache[self.layer_idx]
+                            mx.eval(c.state)
+                    mx.metal.clear_cache()
+                    return res
+                layer.layer_idx = i
+                layer.__call__ = types.MethodType(stream_layer, layer)
+            
+            print("[TurboQuant] Включен SSD-стриминг весов (Layer-by-layer evaluation)!")
             
             # Подготовка Needle and Haystack
             needle = f"\nСекретный пароль для {model_name.split('/')[1]} — 'AppleSiliconM4Turbo'.\n"

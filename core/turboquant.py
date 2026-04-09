@@ -5,40 +5,40 @@ from core.polarquant import PolarQuantCompressor
 class TurboQuant:
     def __init__(self, feature_dim: int, pq_bits: int = 3, qjl_features: int = 2048, seed: int = 42):
         """
-        Компрессор TurboQuant (Двухстадийный конвейер для KV-Cache).
+        TurboQuant Compressor (Two-stage pipeline for KV-Cache).
         
-        1. Использует PolarQuant (MSE-оптимальный квантователь).
-        2. Вычисляет ошибку (остаток).
-        3. Квантует ошибку через QJL, чтобы устранить смещение скалярного произведения (bias).
+        1. Uses PolarQuant (MSE-optimal quantization).
+        2. Computes the error (residual).
+        3. Quantizes the error via QJL to remove dot-product bias.
         
-        :param feature_dim: размерность вектора (d), должна быть степенью двойки
-        :param pq_bits: битрейт для квантования углов в PolarQuant
-        :param qjl_features: количество случайных признаков (k) для QJL 
+        :param feature_dim: vector dimensionality (d), must be a power of two
+        :param pq_bits: bit rate for angle quantization in PolarQuant
+        :param qjl_features: number of random features (k) for QJL 
         """
         self.feature_dim = feature_dim
         
-        # Базовый квантователь (минимизирует L2 расстояние)
+        # Base quantizer (minimizes L2 distance)
         self.pq = PolarQuantCompressor(feature_dim=feature_dim, bits=pq_bits, seed=seed)
         
-        # 1-битный корректор скалярного произведения (остатка)
+        # 1-bit dot-product corrector (residual)
         self.qjl = QJLCompressor(feature_dim=feature_dim, num_features=qjl_features, seed=seed+1)
         
     def compress(self, x: np.ndarray) -> dict:
         """
-        Двухстадийное сжатие вектора или батча.
-        :param x: вектор (d,) или батч (b, d)
-        :return: словарь с компрессированными данными
+        Two-stage vector or batch compression.
+        :param x: vector (d,) or batch (b, d)
+        :return: dictionary with compressed data
         """
-        # --- СТАДИЯ 1: MSE Квантование (PolarQuant) ---
+        # --- STAGE 1: MSE Quantization (PolarQuant) ---
         pq_compressed = self.pq.compress(x)
         
-        # Восстанавливаем аппроксимированный вектор
+        # Reconstruct the approximated vector
         x_mse_approx = self.pq.decompress(pq_compressed)
         
-        # --- СТАДИЯ 2: Остаток (Residual) + QJL ---
+        # --- STAGE 2: Residual + QJL ---
         residual = x - x_mse_approx
         
-        # Квантуем остаток через QJL до 1 бита (знак) + храня норму L2 (одно число на вектор)
+        # Quantize the residual via QJL to 1 bit (sign) + store L2 norm (one number per vector)
         qjl_quant, qjl_norm = self.qjl.compress(residual)
         
         return {
@@ -49,26 +49,26 @@ class TurboQuant:
         
     def estimate_dot(self, compressed: dict, y: np.ndarray) -> np.ndarray:
         """
-        Несмещенная оценка (unbiased estimation) скалярного произведения.
-        :param compressed: сжатые данные от compress()
-        :param y: оригинальный несжатый запрос (float-вектор формы (d,))
-        :return: оценка x * y
+        Unbiased estimation of the dot product.
+        :param compressed: compressed data from compress()
+        :param y: original uncompressed query (float-vector of shape (d,))
+        :return: estimation x * y
         """
-        # 1. Классическое скалярное произведение аппроксимированного вектора
+        # 1. Classical dot product of the approximated vector
         x_mse_approx = self.pq.decompress(compressed["pq_data"])
         
-        # Обрабатываем размерности: батч/одиночка x запросы
+        # Handle shapes: batch/single x queries
         if x_mse_approx.ndim == 2 and y.ndim == 1:
             dot_mse = np.dot(x_mse_approx, y)
         else:
             dot_mse = np.dot(x_mse_approx, y.T)
             
-        # 2. Оценка скалярного произведения остатка (компенсирует смещение dot_mse)
+        # 2. Estimation of residual dot product (compensates dot_mse bias)
         dot_residual = self.qjl.estimate_dot(
             x_quant=compressed["qjl_data"], 
             norm_x=compressed["qjl_norm"], 
             y=y
         )
         
-        # Итоговое скалярное произведение = Доля от PolarQuant + Скорректированная доля ошибки
+        # Final dot product = PolarQuant share + Corrected error share
         return dot_mse + dot_residual

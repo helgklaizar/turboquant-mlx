@@ -3,30 +3,30 @@ import numpy as np
 class PolarQuantCompressor:
     def __init__(self, feature_dim: int, bits: int = 3, seed: int = 42):
         """
-        Компрессор PolarQuant.
-        Использует ортогональную случайную ротацию (preconditioning) 
-        и рекурсивное преобразование в полярные координаты с квантованием углов.
+        PolarQuant Compressor.
+        Uses orthogonal random rotation (preconditioning) 
+        and recursive transformation to polar coordinates with angle quantization.
         
-        :param feature_dim: размерность векторов (должна быть степенью двойки)
-        :param bits: количество бит для квантования углов
+        :param feature_dim: vector dimensionality (must be a power of two)
+        :param bits: number of bits for angle quantization
         """
         self.feature_dim = feature_dim
         self.bits = bits
         self.max_idx = (1 << bits) - 1
         
-        # Проверяем что dim - степень двойки
-        assert (feature_dim & (feature_dim - 1)) == 0 and feature_dim > 0, "feature_dim должен быть степенью 2"
+        # Check that dim is a power of two
+        assert (feature_dim & (feature_dim - 1)) == 0 and feature_dim > 0, "feature_dim must be a power of 2"
         
         np.random.seed(seed)
-        # Генерация случайной ортогональной матрицы для Preconditioning
-        # QR-разложение позволяет получить ортогональную матрицу
+        # Generation of a random orthogonal matrix for Preconditioning
+        # QR decomposition yields an orthogonal matrix
         H = np.random.randn(feature_dim, feature_dim)
         Q, R = np.linalg.qr(H)
         d = np.diagonal(R)
         self.R = Q * np.sign(d)
         
     def _quantize_angle(self, angle: np.ndarray, v_min: float, v_max: float) -> np.ndarray:
-        # Линейное масштабирование в [0, 1] -> в int [0, 2^b - 1]
+        # Linear scaling to [0, 1] -> to int [0, 2^b - 1]
         normalized = (angle - v_min) / (v_max - v_min)
         normalized = np.clip(normalized, 0.0, 1.0)
         quantized = np.round(normalized * self.max_idx).astype(np.int8)
@@ -38,9 +38,9 @@ class PolarQuantCompressor:
 
     def _cartesian_to_polar_recursive(self, x: np.ndarray):
         """
-        Рекурсивный переход батча x в полярные координаты.
+        Recursive transformation of batch x into polar coordinates.
         x: (batch, dim)
-        Возвращает список массивов углов и финальный массив радиусов (batch, 1).
+        Returns a list of angles arrays and the final array of radii (batch, 1).
         """
         current = x
         angles_list = []
@@ -54,10 +54,10 @@ class PolarQuantCompressor:
             angle = np.arctan2(odd, even)
             
             if layer == 0:
-                # Оригинальные векторы лежат в [-pi, pi]
+                # Original vectors lie within [-pi, pi]
                 q_angle = self._quantize_angle(angle, -np.pi, np.pi)
             else:
-                # Радиусы >= 0, поэтому арктангенс от двух радиусов лежит в [0, pi/2]
+                # Radii >= 0, thus the arctangent of two radii is in [0, pi/2]
                 q_angle = self._quantize_angle(angle, 0.0, np.pi/2)
                 
             angles_list.append(q_angle)
@@ -68,15 +68,15 @@ class PolarQuantCompressor:
 
     def _polar_to_cartesian_recursive(self, angles_list: list, radius: np.ndarray):
         """
-        Восстановление. 
-        Вход: список углов, radius (b, 1).
+        Reconstruction. 
+        Input: list of angles, radius (b, 1).
         """
         current = radius
-        # Идем от последнего слоя (вершина) к нулевому (листья)
+        # Traverse from the last layer (root) to the zeroth (leaves)
         for layer in range(len(angles_list)-1, -1, -1):
             q_angle = angles_list[layer]
             
-            # Деквантование
+            # Dequantization
             if layer == 0:
                 angle = self._dequantize_angle(q_angle, -np.pi, np.pi)
             else:
@@ -85,7 +85,7 @@ class PolarQuantCompressor:
             even = current * np.cos(angle)
             odd = current * np.sin(angle)
             
-            # Чередуем элементы: even, odd, even, odd
+            # Interleave elements: even, odd, even, odd
             b, dim = current.shape
             next_current = np.empty((b, dim * 2), dtype=np.float32)
             next_current[:, 0::2] = even
@@ -96,16 +96,16 @@ class PolarQuantCompressor:
 
     def compress(self, x: np.ndarray) -> dict:
         """
-        Сжатие батча или одиночного вектора.
+        Compression of a batch or a single vector.
         """
         is_single = x.ndim == 1
         if is_single:
             x = x.reshape(1, -1)
             
-        # Ротация ортогональной матрицей (preconditioning)
+        # Rotation via orthogonal matrix (preconditioning)
         rotated = np.dot(x, self.R)
         
-        # Получение квантованных углов и корня (радиуса)
+        # Extract quantized angles and root (radius)
         angles_list, radius = self._cartesian_to_polar_recursive(rotated)
         
         if is_single:
@@ -116,12 +116,12 @@ class PolarQuantCompressor:
 
     def decompress(self, compressed: dict) -> np.ndarray:
         """
-        Расжатие (восстановление аппроксимации начального вектора).
+        Decompression (approximate reconstruction of the original vector).
         """
         angles_list = compressed["angles"]
         radius = compressed["radius"]
         
-        # Проверяем одиночный или батч
+        # Check if single vector or batch
         is_single = np.isscalar(radius) or (isinstance(radius, np.ndarray) and radius.ndim == 0)
         
         if is_single:
@@ -131,10 +131,10 @@ class PolarQuantCompressor:
             radius_b = radius
             angles_b = angles_list
             
-        # Обратное полярное преобразование
+        # Inverse polar transformation
         rotated_approx = self._polar_to_cartesian_recursive(angles_b, radius_b)
         
-        # Обратная ротация R^T (т.к. матрица ортогональна, R^-1 = R^T)
+        # Inverse rotation R^T (since the matrix is orthogonal, R^-1 = R^T)
         original_approx = np.dot(rotated_approx, self.R.T)
         
         if is_single:

@@ -2,31 +2,30 @@ import mlx.core as mx
 import math
 
 class MLXPolarQuantCompressor:
-    def __init__(self, feature_dim: int, bits: int = 3, seed: int = 42):
+    def __init__(self, feature_dim: int, theta_bits: int = 3, radius_bits: int = 8, seed: int = 42):
         self.feature_dim = feature_dim
-        self.bits = bits
-        self.max_idx = (1 << bits) - 1
+        self.theta_bits = theta_bits
+        self.theta_max_idx = (1 << theta_bits) - 1
+        self.radius_bits = radius_bits
+        self.radius_max_idx = (1 << radius_bits) - 1
         
         assert (feature_dim & (feature_dim - 1)) == 0 and feature_dim > 0, "feature_dim must be power of 2"
         
-        # QR init (via numpy for simplicity as it's just one-off logic)
-        import numpy as np
-        np.random.seed(seed)
-        H = np.random.randn(feature_dim, feature_dim)
-        Q, R = np.linalg.qr(H)
-        d = np.diagonal(R)
-        np_R = Q * np.sign(d)
+        # QR init natively via MLX
+        mx.random.seed(seed)
+        H = mx.random.normal([feature_dim, feature_dim])
+        Q, R = mx.linalg.qr(H, stream=mx.cpu)
+        d = mx.diag(R)
+        self.R = Q * mx.sign(d)
         
-        self.R = mx.array(np_R, dtype=mx.float32)
-        
-    def _quantize_angle(self, angle: mx.array, v_min: float, v_max: float) -> mx.array:
-        normalized = (angle - v_min) / (v_max - v_min)
+    def _quantize_value(self, val: mx.array, v_min: float, v_max: float, max_idx: int) -> mx.array:
+        normalized = (val - v_min) / (v_max - v_min)
         normalized = mx.clip(normalized, 0.0, 1.0)
-        quantized = mx.round(normalized * self.max_idx).astype(mx.int8)
+        quantized = mx.round(normalized * max_idx).astype(mx.int16)
         return quantized
         
-    def _dequantize_angle(self, q_angle: mx.array, v_min: float, v_max: float) -> mx.array:
-        normalized = q_angle.astype(mx.float32) / self.max_idx
+    def _dequantize_value(self, q_val: mx.array, v_min: float, v_max: float, max_idx: int) -> mx.array:
+        normalized = q_val.astype(mx.float32) / max_idx
         return normalized * (v_max - v_min) + v_min
 
     def _cartesian_to_polar_recursive(self, x: mx.array):
@@ -42,9 +41,9 @@ class MLXPolarQuantCompressor:
             angle = mx.arctan2(odd, even)
             
             if layer == 0:
-                q_angle = self._quantize_angle(angle, -math.pi, math.pi)
+                q_angle = self._quantize_value(angle, -math.pi, math.pi, self.theta_max_idx)
             else:
-                q_angle = self._quantize_angle(angle, 0.0, math.pi / 2.0)
+                q_angle = self._quantize_value(angle, 0.0, math.pi / 2.0, self.theta_max_idx)
                 
             angles_list.append(q_angle)
             current = radius
@@ -58,9 +57,9 @@ class MLXPolarQuantCompressor:
             q_angle = angles_list[layer]
             
             if layer == 0:
-                angle = self._dequantize_angle(q_angle, -math.pi, math.pi)
+                angle = self._dequantize_value(q_angle, -math.pi, math.pi, self.theta_max_idx)
             else:
-                angle = self._dequantize_angle(q_angle, 0.0, math.pi / 2.0)
+                angle = self._dequantize_value(q_angle, 0.0, math.pi / 2.0, self.theta_max_idx)
                 
             even = current * mx.cos(angle)
             odd = current * mx.sin(angle)
@@ -82,26 +81,33 @@ class MLXPolarQuantCompressor:
         rotated = mx.matmul(x_b, self.R)
         angles_list, radius = self._cartesian_to_polar_recursive(rotated)
         
+        r_max = mx.max(radius).item()
+        if r_max == 0:
+            r_max = 1e-9
+            
+        q_radius = self._quantize_value(radius, 0.0, r_max, self.radius_max_idx)
+        
         if is_single:
             angles_list = [a[0] for a in angles_list]
-            radius = radius[0, 0]
+            q_radius = q_radius[0, 0]
             
-        return {"angles": angles_list, "radius": radius}
+        return {"angles": angles_list, "q_radius": q_radius, "r_max": r_max}
 
     def decompress(self, compressed: dict) -> mx.array:
         angles_list = compressed["angles"]
-        radius = compressed["radius"]
+        q_radius = compressed["q_radius"]
+        r_max = compressed["r_max"]
         
-        # scalars don't have .ndim in the same way, but mx.array scalar has ndim == 0
-        is_single = (not isinstance(radius, list) and getattr(radius, 'ndim', -1) == 0) or isinstance(radius, (float, int))
+        is_single = (not isinstance(q_radius, list) and getattr(q_radius, 'ndim', -1) == 0) or isinstance(q_radius, (float, int))
         
         if is_single:
-            radius_b = mx.array([[radius]], dtype=mx.float32)
+            q_radius_b = mx.array([[q_radius]], dtype=mx.int16)
             angles_b = [mx.expand_dims(a, 0) for a in angles_list]
         else:
-            radius_b = radius
+            q_radius_b = q_radius
             angles_b = angles_list
             
+        radius_b = self._dequantize_value(q_radius_b, 0.0, r_max, self.radius_max_idx)
         rotated_approx = self._polar_to_cartesian_recursive(angles_b, radius_b)
         
         original_approx = mx.matmul(rotated_approx, self.R.T)

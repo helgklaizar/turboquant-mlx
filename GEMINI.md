@@ -1,45 +1,25 @@
-# TurboQuant Mac — Project Working Memory
+# TurboQuant Mac — Project Index
 
-## Stack
-- Python 3 (pyproject.toml)
-- Apple MLX (`mlx.core`, Metal GPU acceleration)
-- `mlx_lm` (API integration and LLM generation)
+## ⚙️ Локальный контекст (Правила и Стек)
+Вся инфраструктура и жесткие архитектурные правила вынесены в локальную память:
+- [stack.md](./.gemini/rules/stack.md) — Стек проекта.
+- [constraints.md](./.gemini/rules/constraints.md) — Критические ограничения.
 
-## Quick Run
-```bash
-# Package install
-pip install -e .
 
-# Launch compressed OpenAI-compatible Server 
-python3 scripts/run_server.py --model mlx-community/Meta-Llama-3-8B-Instruct-4bit
 
-# Run generation tests across 5 models
-PYTHONPATH=. python3 scripts/run_needle_test.py
-```
+## 📌 Context
+- **What it is:** Pure PolarQuant algorithm for extreme LLM KV Cache compression on Apple Silicon, with Asymmetric K/V scaling & Boundary V isolation. Note: QJL was dropped as it increased variance.
+- **Stack:** Python 3, Apple MLX (`mlx.core`, Metal GPU), `mlx_lm`.
 
-## Architecture
-Objective: Implement QJL and PolarQuant algorithms for unprecedented LLM KV Cache compression (down to 3 bits) without quality loss.
-- `mlx_core/mlx_turboquant.py` — Metal-optimized full quantization pipeline (Keys)
-- `mlx_core/mlx_polarquant.py` — Fast MSE quantization (Values)
-- `mlx_core/cache.py` — Dynamic class replacement for `mlx_lm`'s `KVCache` with integrated chunking
-- `scripts/` — Handful scripts for tests, local servers, and EXO-clusters
+## 🛑 Critical Constraints / Red Flags
+- Custom `.metal` shaders are currently forbidden (lazy graph compilation is sufficient, stay in Python).
+- OOM Risk: Mac OOM kills 70B layer-by-layer streaming on 16GB. Do not brute force it without proper disk mmap chunking.
 
-## Key Design Decisions
-- **mlx_lm Monkey-patch:** Seamlessly integrates directly into `make_prompt_cache` and `KVCache`, guaranteeing memory compression across modules globally.
-- **Asymmetric Compression:** Keys are compressed via highly accurate `TurboQuant`, while Values are heavily shrunk via standard `PolarQuant`.
-- **Heavy Hitter Caching / FP16 Sink:** First 128 context tokens stay completely uncompressed, saving instruction-following metrics at extreme bitrates. 
+## 🚀 Environment (Quick Start)
+- **Install:** `pip install -e .`
+- **Prod Server:** `python3 scripts/run_server.py --model mlx-community/Meta-Llama-3-8B-Instruct-4bit`
 
-## Known Issues / Tech Debt
-- Writing custom `.metal` shaders is postponed (the Python `mlx.core` API is currently fast enough due to lazy graph compilation).
-- Architectures like Qwen/Gemma/Phi-3 exhibit more hallucination with 3-bit caches on current hyper-parameters, while Meta Llama 3 and 3.2 function flawlessly.
-
-## Recent Progress
-- Repackaged the architecture into a production `pip` distribution on GitHub.
-- Built an integration wrapper `apply_turboquant_cache` providing dynamic chunking (64 token splits).
-- Ported exact `memory_size` tracker and `run_exo_node.py` wrapper for EXO framework clusters.
-- Successfully executed the *Needle-in-a-Haystack* stress test. Meta Llama architectures proved to be fully immune to 3-bit compression, efficiently shedding ~75% of their RAM overhead footprint.
-- Fully localized repository to English (README, docs) for open-source adoption.
-
-## Next Steps
-1. Collect community feedback.
-2. Hyper-parameter tuning (Theta_bits, Radius_bits) to stabilize GQA architectures from Google and Alibaba.
+## 📚 Documentation Navigation
+- 🏗 **Architecture & Monkey-patching Details:** `docs/architecture.md`
+- 📦 **Scripts & Tests Setup:** `docs/deploy.md`
+- 📅 **Active Sprint & Next Steps:** `docs/sprints/week-1.md`
