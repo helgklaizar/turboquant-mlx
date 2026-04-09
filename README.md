@@ -33,15 +33,15 @@ You can seamlessly plug TurboQuant into any existing `mlx_lm` models (Llama 3, G
 ```python
 import mlx.core as mx
 from mlx_lm import load
-from mlx_core.cache import apply_turboquant_cache
+from plugins.cache_plugin import apply_turboquant_cache
 
 # Load your favorite model
 model, tokenizer = load("mlx-community/Meta-Llama-3-8B-Instruct-4bit")
 
 # Apply TurboQuant monkey-patch globally
-# k_bits/v_bits - set custom asymmetric PolarQuant precision
-# fp16_sink_size - tokens immune to compression (usually your System Prompt)
-apply_turboquant_cache(model, k_bits=8, v_bits=3, fp16_sink_size=128)
+# k_theta_bits/k_radius_bits — precision for Keys, v_theta_bits/v_radius_bits — for Values
+# fp16_sink_size — tokens immune to compression (usually your System Prompt)
+apply_turboquant_cache(model, k_theta_bits=8, v_theta_bits=3, fp16_sink_size=128)
 
 # Now, any model generation will consume ~70% less memory on the KV-Cache.
 ```
@@ -74,7 +74,7 @@ We executed a 100% precision **Needle-in-a-Haystack** stress test across top Hug
 | **Mistral NeMo**  | `Mistral-Nemo-12B-4bit`      | ✅ Pass | Highly robust parameter layout; ideal for PolarQuant. |
 | **Meta Llama 3**  | `Llama-3-8B-Instruct-4bit`   | ✅ Pass | Flawless dot-product accuracy. Perfect for heavy MLX workloads. |
 | **Meta Llama 3.2**| `Llama-3.2-1B-Instruct-4bit` | ✅ Pass | Highly resilient despite tiny 1B parameter count! |
-| **Qwen 2.5**      | `Qwen2.5-1.5B` & `7B`        | ❌ Fail | Native embeddings lack `head_dim` layer attributes in `mlx-lm` parser. |
+| **Qwen 2.5 / 3.5**| `Qwen2.5-7B`, `Qwen3.5-35B-A3B` | ✅ Pass | Fixed via lazy KV init. Tested on M4 Max 64GB. |
 | **Gemma 2**       | `gemma-2-2b-it-4bit`         | ❌ Fail | Native embeddings clash with heavy polar transformations at 3-bit.
 
 ## 🌐 OpenAI-Compatible Server
@@ -83,6 +83,25 @@ Run your models via a highly-optimized API server suitable for tools like Chatbo
 
 ```bash
 python scripts/run_server.py --model mlx-community/Meta-Llama-3-8B-Instruct-4bit
+```
+
+## 🎛️ LM Studio Compatibility
+
+TurboQuant is **not directly compatible with LM Studio**, as LM Studio uses its own bundled runtime and does not expose the `mlx_lm` cache layer for patching.
+
+To get compression benefits similar to TurboQuant in an interactive UI, use one of these alternatives:
+
+- **[Jan](https://jan.ai/)** — local AI client with MLX support, works seamlessly with `run_server.py` as a backend.
+- **[Chatbox](https://chatboxai.app/)** — connect to TurboQuant's OpenAI-compatible server (`run_server.py`) via `http://localhost:8080`.
+- **[Open WebUI](https://github.com/open-webui/open-webui)** — full-featured UI that connects to any OpenAI-compatible API.
+
+The recommended approach:
+```bash
+# Start TurboQuant server
+python scripts/run_server.py --model mlx-community/Meta-Llama-3-8B-Instruct-4bit --port 8080
+
+# Then point Chatbox / Jan / Open WebUI to:
+# API Base URL: http://localhost:8080/v1
 ```
 
 ## 🤝 Acknowledgements

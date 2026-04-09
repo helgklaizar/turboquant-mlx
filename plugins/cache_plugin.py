@@ -5,8 +5,12 @@ class TurboQuantKVCache:
     KVCache реализация для Apple MLX.
     Заменяет стандартный mlx_lm.models.cache.KVCache на нашу сжатую версию TurboQuant.
     Она сжимает ключи (и значения по желанию) во время префил-фазы генерации.
+    Поддерживает lazy initialization — компрессоры создаются при первом вызове update_and_fetch,
+    что обеспечивает совместимость с Qwen/GQA-моделями (они вызывают KVCache() без аргументов).
     """
-    def __init__(self, head_dim: int, n_kv_heads: int, k_theta_bits: int = 8, k_radius_bits: int = 8, v_theta_bits: int = 3, v_radius_bits: int = 8, fp16_sink_size: int = 128, is_boundary: bool = False):
+    step = 256  # для совместимости с mlx_lm server
+
+    def __init__(self, head_dim: int = 0, n_kv_heads: int = 0, k_theta_bits: int = 8, k_radius_bits: int = 8, v_theta_bits: int = 3, v_radius_bits: int = 8, fp16_sink_size: int = 128, is_boundary: bool = False):
         self.head_dim = head_dim
         self.n_kv_heads = n_kv_heads
         
@@ -17,23 +21,14 @@ class TurboQuantKVCache:
         self.k_radius_bits = k_radius_bits
         self.v_theta_bits = v_theta_bits
         self.v_radius_bits = v_radius_bits
+        self.fp16_sink_size_default = fp16_sink_size
         self.is_boundary = is_boundary
         
-        # Если это граничный слой или биты >= 16 — мы не сжимаем вообще, делаем размер sink бесконечным.
-        if self.is_boundary or (self.k_theta_bits >= 16 and self.v_theta_bits >= 16):
-            self.fp16_sink_size = float('inf')
-            self.compress_k = False
-            self.compress_v = False
-        else:
-            self.fp16_sink_size = fp16_sink_size
-            self.compress_k = self.k_theta_bits < 16
-            self.compress_v = self.v_theta_bits < 16
-            
-            from mlx_core.mlx_polarquant import MLXPolarQuantCompressor
-            if self.compress_k:
-                self.k_compressor = MLXPolarQuantCompressor(feature_dim=head_dim, theta_bits=k_theta_bits, radius_bits=k_radius_bits)
-            if self.compress_v:
-                self.v_compressor = MLXPolarQuantCompressor(feature_dim=head_dim, theta_bits=v_theta_bits, radius_bits=v_radius_bits)
+        # Отложенная инициализация — компрессор создаётся при первом вызове update_and_fetch
+        self._initialized = False
+        self.compress_k = False
+        self.compress_v = False
+        self.fp16_sink_size = float('inf')  # По умолчанию не сжимаем до инициализации
         
         # Буфер для первых важных токенов без сжатия (Attention Sink) или для boundary-слоев
         self.sink_keys = None
@@ -47,6 +42,34 @@ class TurboQuantKVCache:
         
         self.key_buffer = None
         self.value_buffer = None
+        
+        # Атрибуты для совместимости с mlx_lm server
+        self.keys = None
+        self.values = None
+
+    def _lazy_init(self, head_dim: int, n_kv_heads: int):
+        """Инициализирует компрессоры на основе реальной размерности тензора."""
+        if self._initialized:
+            return
+        self.head_dim = head_dim
+        self.n_kv_heads = n_kv_heads
+        
+        if self.is_boundary or (self.k_theta_bits >= 16 and self.v_theta_bits >= 16):
+            self.fp16_sink_size = float('inf')
+            self.compress_k = False
+            self.compress_v = False
+        else:
+            self.fp16_sink_size = self.fp16_sink_size_default
+            self.compress_k = self.k_theta_bits < 16
+            self.compress_v = self.v_theta_bits < 16
+            
+            from mlx_core.mlx_polarquant import MLXPolarQuantCompressor
+            if self.compress_k:
+                self.k_compressor = MLXPolarQuantCompressor(feature_dim=head_dim, theta_bits=self.k_theta_bits, radius_bits=self.k_radius_bits)
+            if self.compress_v:
+                self.v_compressor = MLXPolarQuantCompressor(feature_dim=head_dim, theta_bits=self.v_theta_bits, radius_bits=self.v_radius_bits)
+        
+        self._initialized = True
 
     def _compress_and_store(self, k: mx.array, v: mx.array):
         b, h, s, d = k.shape
@@ -66,6 +89,10 @@ class TurboQuantKVCache:
             self.uncompressed_values_chunks.append(v)
 
     def update_and_fetch(self, keys: mx.array, values: mx.array) -> tuple[mx.array, mx.array]:
+        # Lazy init: определяем размерности из реального тензора
+        b, h, s, d = keys.shape
+        self._lazy_init(head_dim=d, n_kv_heads=h)
+        
         prev_offset = self.offset
         self.offset += keys.shape[2]
         
