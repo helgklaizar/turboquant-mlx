@@ -7,11 +7,12 @@
 
 TurboQuant MLX is an advanced implementation of near-optimal distortion-rate KV cache compression algorithms tailored specifically for the Apple MLX framework. It significantly reduces memory usage of Language Models by up to 5x with almost perfectly preserved accuracy. 
 
-The library heavily utilizes techniques from Google Research such as **PolarQuant** (Cartesian-to-Polar transformations) and **Quantized Johnson-Lindenstrauss (QJL)** for unbiased dot-product estimation.
+The library utilizes the **PolarQuant** (Cartesian-to-Polar transformations) algorithm for unbiased dot-product estimation. Note: We intentionally **dropped QJL** (Quantized Johnson-Lindenstrauss error correction) as extensive community tests verified it introduces unnecessary variance that actually degrades softmax quality!
 
 ## 🌟 Key Features
 
-- **Asymmetric Compression:** Compresses `Keys` using TurboQuant (PolarQuant + QJL) for exact dot-product estimation, and `Values` using lightweight PolarQuant to eliminate MSE errors.
+- **Asymmetric K/V Compression:** Keys dictate attention accurately, while Values can be aggressively compressed. Set `k_bits=8` and `v_bits=3` to achieve high accuracy at massive scale.
+- **Boundary V (Smart Layer Isolation):** Protects the first 2 and last 2 neural-network layers of your model (leaving them uncompressed) to recover up to 90% of lost precision from compression, zero performance penalty.
 - **Attention Sink (Heavy Hitter Caching):** Safeguards LLM instruction-following capabilities by preserving the initial system prompt (e.g., first 128 tokens) in uncompressed `float16`. 
 - **Dynamic Chunking Buffer:** Caches long generations strictly by segment chunks (64 tokens), drastically dropping VRAM consumption footprint on M-Series Macs.
 - **EXO Cluster Ready:** Fully compatible with decentralized Apple Silicon inference networks. 
@@ -38,9 +39,9 @@ from mlx_core.cache import apply_turboquant_cache
 model, tokenizer = load("mlx-community/Meta-Llama-3-8B-Instruct-4bit")
 
 # Apply TurboQuant monkey-patch globally
-# bits - polar compression bitrate per angular coordinate
+# k_bits/v_bits - set custom asymmetric PolarQuant precision
 # fp16_sink_size - tokens immune to compression (usually your System Prompt)
-apply_turboquant_cache(model, bits=3, fp16_sink_size=128)
+apply_turboquant_cache(model, k_bits=8, v_bits=3, fp16_sink_size=128)
 
 # Now, any model generation will consume ~70% less memory on the KV-Cache.
 ```
@@ -86,4 +87,21 @@ python scripts/run_server.py --model mlx-community/Meta-Llama-3-8B-Instruct-4bit
 
 ## 🤝 Acknowledgements
 
-Massive thanks to the **[DeadByDawn101/turboquant-mlx](https://github.com/DeadByDawn101/turboquant-mlx)** repository for architectural inspiration! The concepts regarding Exo cluster integration, deep `make_prompt_cache` patching, and exact memory-byte tracking were successfully adapted into this standalone optimization thanks to their incredible groundwork!
+Massive thanks to **[DeadByDawn101/turboquant-mlx](https://github.com/DeadByDawn101/turboquant-mlx)** for architectural inspiration (Exo cluster integration, deep monkey-patching arrays).
+
+Special shout-out to **[TheTom/turboquant_plus](https://github.com/TheTom/turboquant_plus)** and the amazing `llama.cpp` implementation community! Their rigorous research and hardware validation brought us the defining innovations of v1: **Asymmetric K/V Compression**, **Boundary V layer protection**, and the empirical proof to safely **remove QJL** for higher quality output!
+
+
+---
+
+## 🍏 The Mac AI Ecosystem
+This project is part of a large-scale initiative to build high-performance AI tools specifically for Apple Silicon developers. Check out our other open-source adaptations:
+
+- [🍏 **LLM Env Selector**](https://github.com/helgklaizar/llm-env-selector) — The ultimate UI configurator for your Apple Silicon AI environment.
+- [🌉 **CUDA2MLX Bridge**](https://github.com/helgklaizar/cuda2mlx-bridge) — Drop-in replacement to run PyTorch CUDA projects natively on MLX.
+- [🚀 **TurboQuant MLX**](https://github.com/helgklaizar/turboquant_mlx) — Extreme KV Cache Compression (1-3 bit) for LLMs natively on Apple Silicon.
+- [🔥 **MLX Flamegraph**](https://github.com/helgklaizar/mlx-flamegraph) — Energy UI profiler for neural networks.
+- [🧠 **APFS Vector Indexer**](https://github.com/helgklaizar/apfs-rag-indexer) — Native system RAG with zero battery drain.
+- [⚒️ **MLX Forge**](https://github.com/helgklaizar/mlx-forge) — Blazing fast memory-efficient LLM Fine-Tuning purely on Apple Silicon.
+- [🔳 **MLX BitNet**](https://github.com/helgklaizar/mlx-bitnet) — Native Ternary (1.58-bit) Matrix Multiplication Kernels mapped directly on Metal.
+
