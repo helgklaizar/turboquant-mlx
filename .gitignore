@@ -166,3 +166,9 @@ node_modules
 coverage/
 dist/
 build/
+
+
+# Professional Cleanup Patterns
+coverage/
+dist/
+build/
