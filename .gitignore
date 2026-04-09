@@ -3,3 +3,10 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 .DS_Store
+
+
+# Internal Tasks & Planning
+TODO*.md
+GEMINI.md
+docs/sprints/
+arch-audit*.md
