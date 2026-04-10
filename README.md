@@ -114,25 +114,19 @@ Special shout-out to **[TheTom/turboquant_plus](https://github.com/TheTom/turboq
 ---
 
 ## 🍏 The Mac AI Ecosystem
+
 This initiative is a suite of high-performance tools natively optimized for Apple Silicon (MLX).
 
-- [🍏 **Env-Selector-MLX**](https://github.com/helgklaizar/env-selector-mlx) — UI configurator for your AI environment.
-- [🌉 **Cuda-Bridge-MLX**](https://github.com/helgklaizar/cuda-bridge-mlx) — Run CUDA-dependent projects natively.
-- [🚀 **TurboQuant-MLX**](https://github.com/helgklaizar/turboquant-mlx) — Extreme KV Cache Compression (1-3 bit).
-- [🔥 **Flamegraph-MLX**](https://github.com/helgklaizar/flamegraph-mlx) — Energy & Performance Visual Profiler.
-- [🧠 **Rag-Indexer-MLX**](https://github.com/helgklaizar/rag-indexer-mlx) — Native system RAG with zero battery drain.
-- [⚒️ **Forge-MLX**](https://github.com/helgklaizar/forge-mlx) — Fast and memory-efficient Fine-Tuning.
+- [🚀 **TurboQuant-MLX**](https://github.com/helgklaizar/turboquant-mlx) — Флагман: сжатие ОЗУ до 5 раз.
+- [⚒️ **Forge-MLX**](https://github.com/helgklaizar/forge-mlx) — Фреймворк для оптимизации.
+- [🏎️ **Liger-Kernel-MLX**](https://github.com/helgklaizar/liger-kernel-mlx) — Высокопроизводительные Metal кернелы.
 - [🔳 **BitNet-MLX**](https://github.com/helgklaizar/bitnet-mlx) — Native Ternary (1.58-bit) Kernels.
-- [👁️ **OmniParser-MLX**](https://github.com/helgklaizar/omni-parser-mlx) — visual GUI understanding.
-- [⚡️ **Flash-Attention-MLX**](https://github.com/helgklaizar/flash-attention-mlx) — Native FA3 for Metal.
-- [🌿 **SageAttention-MLX**](https://github.com/helgklaizar/sage-attention-mlx) — Ultra-fast Quantized Attention.
-- [🧬 **Attention-Matching-MLX**](https://github.com/helgklaizar/attention-matching-mlx) — Recursive 50x-100x context compression.
-- [🚀 **RocketKV-MLX**](https://github.com/helgklaizar/rocket-kv-mlx) — Extreme 400x cache pruning.
-- [📡 **KVTC-MLX**](https://github.com/helgklaizar/kvtc-mlx) — Transform coding for KV cache.
-- [🌌 **AETHER-MLX**](https://github.com/helgklaizar/aether-mlx) — Geometric Sparse Attention.
-- [🌌 **DeepSeek-MLX**](https://github.com/helgklaizar/deepseek-mlx) — High-throughput inference engine.
-- [🎞 **Open-Sora-MLX**](https://github.com/helgklaizar/open-sora-mlx) — Text-to-Video generation pipeline.
-- [🗣 **Moshi-Voice-MLX**](https://github.com/helgklaizar/moshi-voice-mlx) — Realtime Voice-to-Voice agents.
-- [🎲 **MCTS-RL-MLX**](https://github.com/helgklaizar/mcts-rl-mlx) — Parallel reasoning at scale.
-- [🧬 **Evol-KV-MLX**](https://github.com/helgklaizar/evol-kv-mlx) — Evolutionary Token Selection for KV-Cache.
-
+- [⚡️ **Flash-Attention-MLX**](https://github.com/helgklaizar/flash-attention-mlx) — Ядерная база для FA3 на Metal.
+- [🌉 **CUDA-Bridge-MLX**](https://github.com/helgklaizar/cuda-bridge-mlx) — Мокинг CUDA под мак.
+- [🗂️ **Paged-Attention-MLX**](https://github.com/helgklaizar/paged-attention-mlx) — Управление KV-кешем.
+- [🧬 **Evol-KV-MLX**](https://github.com/helgklaizar/evol-kv-mlx) — Эволюционный отбор токенов.
+- [💧 **H2O-MLX**](https://github.com/helgklaizar/h2o-mlx) — Реализация алгоритма Heavy-Hitter Oracle.
+- [📡 **KVTC-MLX**](https://github.com/helgklaizar/kvtc-mlx) — Transform Coding для KV-кеша.
+- [🚀 **Rocket-KV-MLX**](https://github.com/helgklaizar/rocket-kv-mlx) — Реализация "ракетного" прунинга.
+- [🌿 **Sage-Attention-MLX**](https://github.com/helgklaizar/sage-attention-mlx) — Ускорение внимания.
+- [🧬 **Attention-Matching-MLX**](https://github.com/helgklaizar/attention-matching-mlx) — Механизм Attention Matching.
